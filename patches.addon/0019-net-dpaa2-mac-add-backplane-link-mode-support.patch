@@ -1,0 +1,55 @@
+From 29152b3a437cba87fe8fa6774f5372d8c26c9091 Mon Sep 17 00:00:00 2001
+From: Russell King <rmk+kernel@armlinux.org.uk>
+Date: Fri, 5 Feb 2021 10:40:09 +0000
+Subject: [PATCH 19/60] net: dpaa2-mac: add backplane link mode support
+Patch-mainline: Submitted, Jon Nettleton et al
+References: bnc#0000000
+
+Add support for backplane link mode, which is, according to discussions
+with NXP earlier in the year, is a mode where the OS (Linux) is able to
+manage the PCS and Serdes itself.
+
+This commit prepares the ground work for allowing 1G fiber connections
+to be used with DPAA2 on the SolidRun CEX7 platforms.
+
+Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ drivers/net/ethernet/freescale/dpaa2/dpaa2-eth.h | 4 +++-
+ drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c | 5 +++--
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/ethernet/freescale/dpaa2/dpaa2-eth.h b/drivers/net/ethernet/freescale/dpaa2/dpaa2-eth.h
+index c3d456c45102..9b6a89709ce1 100644
+--- a/drivers/net/ethernet/freescale/dpaa2/dpaa2-eth.h
++++ b/drivers/net/ethernet/freescale/dpaa2/dpaa2-eth.h
+@@ -695,7 +695,9 @@ static inline unsigned int dpaa2_eth_rx_head_room(struct dpaa2_eth_priv *priv)
+ 
+ static inline bool dpaa2_eth_is_type_phy(struct dpaa2_eth_priv *priv)
+ {
+-	if (priv->mac && priv->mac->attr.link_type == DPMAC_LINK_TYPE_PHY)
++	if (priv->mac &&
++	    (priv->mac->attr.link_type == DPMAC_LINK_TYPE_PHY ||
++	     priv->mac->attr.link_type == DPMAC_LINK_TYPE_BACKPLANE))
+ 		return true;
+ 
+ 	return false;
+diff --git a/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c b/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c
+index 58404497afa9..477684b759ab 100644
+--- a/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c
++++ b/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c
+@@ -323,8 +323,9 @@ int dpaa2_mac_connect(struct dpaa2_mac *mac)
+ 		goto err_put_node;
+ 	}
+ 
+-	if (mac->attr.link_type == DPMAC_LINK_TYPE_PHY &&
+-	    mac->attr.eth_if != DPMAC_ETH_IF_RGMII) {
++	if ((mac->attr.link_type == DPMAC_LINK_TYPE_PHY &&
++	     mac->attr.eth_if != DPMAC_ETH_IF_RGMII) ||
++	    mac->attr.link_type == DPMAC_LINK_TYPE_BACKPLANE) {
+ 		err = dpaa2_pcs_create(mac, dpmac_node, mac->attr.id);
+ 		if (err)
+ 			goto err_put_node;
+-- 
+2.32.0
+

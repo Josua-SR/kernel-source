@@ -1,0 +1,100 @@
+From 9db57abea1c852c68dadb2d799b8affec633c94c Mon Sep 17 00:00:00 2001
+From: Shameer Kolothum <shameerali.kolothum.thodi@huawei.com>
+Date: Tue, 6 Apr 2021 14:30:27 -0700
+Subject: [PATCH 01/60] ACPICA: IORT: Updates for revision E.b
+Patch-mainline: Submitted, Jon Nettleton et al
+References: bnc#0000000
+
+ACPICA commit 8710a708faed728ea2672b8da842b2e9af1cf5bd
+
+IORT revision E.b (ARM DEN 0049E.b) contains a few additions like,
+    -Added an identifier field in the node descriptors to aid table
+     cross-referencing.
+    -Introduced the Reserved Memory Range(RMR) node. This is used
+     to describe memory ranges that are used by endpoints and require
+     a unity mapping in SMMU.
+    -Introduced a flag in the RC node to express support for PRI.
+    -Added a flag in the RC node to declare support for PASID forward
+     information.
+
+Please note that IORT Rev E and E.a have known issues and are not
+supported.
+
+Link: https://github.com/acpica/acpica/commit/8710a708
+Signed-off-by: Shameer Kolothum <shameerali.kolothum.thodi@huawei.com>
+Signed-off-by: Bob Moore <robert.moore@intel.com>
+Signed-off-by: Erik Kaneda <erik.kaneda@intel.com>
+Signed-off-by: Rafael J. Wysocki <rafael.j.wysocki@intel.com>
+---
+ include/acpi/actbl2.h | 26 ++++++++++++++++++++------
+ 1 file changed, 20 insertions(+), 6 deletions(-)
+
+diff --git a/include/acpi/actbl2.h b/include/acpi/actbl2.h
+index ec66779cb193..602e6281cd5b 100644
+--- a/include/acpi/actbl2.h
++++ b/include/acpi/actbl2.h
+@@ -68,7 +68,7 @@
+  * IORT - IO Remapping Table
+  *
+  * Conforms to "IO Remapping Table System Software on ARM Platforms",
+- * Document number: ARM DEN 0049D, March 2018
++ * Document number: ARM DEN 0049E.b, Feb 2021
+  *
+  ******************************************************************************/
+ 
+@@ -86,7 +86,7 @@ struct acpi_iort_node {
+ 	u8 type;
+ 	u16 length;
+ 	u8 revision;
+-	u32 reserved;
++	u32 identifier;
+ 	u32 mapping_count;
+ 	u32 mapping_offset;
+ 	char node_data[1];
+@@ -100,7 +100,8 @@ enum acpi_iort_node_type {
+ 	ACPI_IORT_NODE_PCI_ROOT_COMPLEX = 0x02,
+ 	ACPI_IORT_NODE_SMMU = 0x03,
+ 	ACPI_IORT_NODE_SMMU_V3 = 0x04,
+-	ACPI_IORT_NODE_PMCG = 0x05
++	ACPI_IORT_NODE_PMCG = 0x05,
++	ACPI_IORT_NODE_RMR = 0x06,
+ };
+ 
+ struct acpi_iort_id_mapping {
+@@ -167,10 +168,11 @@ struct acpi_iort_root_complex {
+ 	u8 reserved[3];		/* Reserved, must be zero */
+ };
+ 
+-/* Values for ats_attribute field above */
++/* Masks for ats_attribute field above */
+ 
+-#define ACPI_IORT_ATS_SUPPORTED         0x00000001	/* The root complex supports ATS */
+-#define ACPI_IORT_ATS_UNSUPPORTED       0x00000000	/* The root complex doesn't support ATS */
++#define ACPI_IORT_ATS_SUPPORTED         (1)	/* The root complex ATS support */
++#define ACPI_IORT_PRI_SUPPORTED         (1<<1)	/* The root complex PRI support */
++#define ACPI_IORT_PASID_FWD_SUPPORTED   (1<<2)	/* The root complex PASID forward support */
+ 
+ struct acpi_iort_smmu {
+ 	u64 base_address;	/* SMMU base address */
+@@ -241,6 +243,18 @@ struct acpi_iort_pmcg {
+ 	u64 page1_base_address;
+ };
+ 
++struct acpi_iort_rmr {
++	u32 flags;
++	u32 rmr_count;
++	u32 rmr_offset;
++};
++
++struct acpi_iort_rmr_desc {
++	u64 base_address;
++	u64 length;
++	u32 reserved;
++};
++
+ /*******************************************************************************
+  *
+  * IVRS - I/O Virtualization Reporting Structure
+-- 
+2.32.0
+

@@ -1,0 +1,302 @@
+From 147a622301f3c13daa4e50ebe9998089996dbbfc Mon Sep 17 00:00:00 2001
+From: Jean-Philippe Brucker <jean-philippe@linaro.org>
+Date: Fri, 18 Jun 2021 17:20:57 +0200
+Subject: [PATCH 03/60] ACPI: Move IOMMU setup code out of IORT
+Patch-mainline: Submitted, Jon Nettleton et al
+References: bnc#0000000
+
+Extract the code that sets up the IOMMU infrastructure from IORT, since
+it can be reused by VIOT. Move it one level up into a new
+acpi_iommu_configure_id() function, which calls the IORT parsing
+function which in turn calls the acpi_iommu_fwspec_init() helper.
+
+Signed-off-by: Jean-Philippe Brucker <jean-philippe@linaro.org>
+Reviewed-by: Eric Auger <eric.auger@redhat.com>
+Reviewed-by: Robin Murphy <robin.murphy@arm.com>
+Link: https://lore.kernel.org/r/20210618152059.1194210-3-jean-philippe@linaro.org
+Signed-off-by: Joerg Roedel <jroedel@suse.de>
+---
+ drivers/acpi/arm64/iort.c | 74 +++++----------------------------------
+ drivers/acpi/scan.c       | 73 +++++++++++++++++++++++++++++++++++++-
+ include/acpi/acpi_bus.h   |  3 ++
+ include/linux/acpi_iort.h |  8 ++---
+ 4 files changed, 86 insertions(+), 72 deletions(-)
+
+diff --git a/drivers/acpi/arm64/iort.c b/drivers/acpi/arm64/iort.c
+index 2494138a6905..a0196a4c05f4 100644
+--- a/drivers/acpi/arm64/iort.c
++++ b/drivers/acpi/arm64/iort.c
+@@ -806,23 +806,6 @@ static struct acpi_iort_node *iort_get_msi_resv_iommu(struct device *dev)
+ 	return NULL;
+ }
+ 
+-static inline const struct iommu_ops *iort_fwspec_iommu_ops(struct device *dev)
+-{
+-	struct iommu_fwspec *fwspec = dev_iommu_fwspec_get(dev);
+-
+-	return (fwspec && fwspec->ops) ? fwspec->ops : NULL;
+-}
+-
+-static inline int iort_add_device_replay(struct device *dev)
+-{
+-	int err = 0;
+-
+-	if (dev->bus && !device_iommu_mapped(dev))
+-		err = iommu_probe_device(dev);
+-
+-	return err;
+-}
+-
+ /**
+  * iort_iommu_msi_get_resv_regions - Reserved region driver helper
+  * @dev: Device from iommu_get_resv_regions()
+@@ -900,18 +883,6 @@ static inline bool iort_iommu_driver_enabled(u8 type)
+ 	}
+ }
+ 
+-static int arm_smmu_iort_xlate(struct device *dev, u32 streamid,
+-			       struct fwnode_handle *fwnode,
+-			       const struct iommu_ops *ops)
+-{
+-	int ret = iommu_fwspec_init(dev, fwnode, ops);
+-
+-	if (!ret)
+-		ret = iommu_fwspec_add_ids(dev, &streamid, 1);
+-
+-	return ret;
+-}
+-
+ static bool iort_pci_rc_supports_ats(struct acpi_iort_node *node)
+ {
+ 	struct acpi_iort_root_complex *pci_rc;
+@@ -946,7 +917,7 @@ static int iort_iommu_xlate(struct device *dev, struct acpi_iort_node *node,
+ 		return iort_iommu_driver_enabled(node->type) ?
+ 		       -EPROBE_DEFER : -ENODEV;
+ 
+-	return arm_smmu_iort_xlate(dev, streamid, iort_fwnode, ops);
++	return acpi_iommu_fwspec_init(dev, streamid, iort_fwnode, ops);
+ }
+ 
+ struct iort_pci_alias_info {
+@@ -1019,24 +990,13 @@ static int iort_nc_iommu_map_id(struct device *dev,
+  * @dev: device to configure
+  * @id_in: optional input id const value pointer
+  *
+- * Returns: iommu_ops pointer on configuration success
+- *          NULL on configuration failure
++ * Returns: 0 on success, <0 on failure
+  */
+-const struct iommu_ops *iort_iommu_configure_id(struct device *dev,
+-						const u32 *id_in)
++int iort_iommu_configure_id(struct device *dev, const u32 *id_in)
+ {
+ 	struct acpi_iort_node *node;
+-	const struct iommu_ops *ops;
+ 	int err = -ENODEV;
+ 
+-	/*
+-	 * If we already translated the fwspec there
+-	 * is nothing left to do, return the iommu_ops.
+-	 */
+-	ops = iort_fwspec_iommu_ops(dev);
+-	if (ops)
+-		return ops;
+-
+ 	if (dev_is_pci(dev)) {
+ 		struct iommu_fwspec *fwspec;
+ 		struct pci_bus *bus = to_pci_dev(dev)->bus;
+@@ -1045,7 +1005,7 @@ const struct iommu_ops *iort_iommu_configure_id(struct device *dev,
+ 		node = iort_scan_node(ACPI_IORT_NODE_PCI_ROOT_COMPLEX,
+ 				      iort_match_node_callback, &bus->dev);
+ 		if (!node)
+-			return NULL;
++			return -ENODEV;
+ 
+ 		info.node = node;
+ 		err = pci_for_each_dma_alias(to_pci_dev(dev),
+@@ -1058,7 +1018,7 @@ const struct iommu_ops *iort_iommu_configure_id(struct device *dev,
+ 		node = iort_scan_node(ACPI_IORT_NODE_NAMED_COMPONENT,
+ 				      iort_match_node_callback, dev);
+ 		if (!node)
+-			return NULL;
++			return -ENODEV;
+ 
+ 		err = id_in ? iort_nc_iommu_map_id(dev, node, id_in) :
+ 			      iort_nc_iommu_map(dev, node);
+@@ -1067,32 +1027,14 @@ const struct iommu_ops *iort_iommu_configure_id(struct device *dev,
+ 			iort_named_component_init(dev, node);
+ 	}
+ 
+-	/*
+-	 * If we have reason to believe the IOMMU driver missed the initial
+-	 * add_device callback for dev, replay it to get things in order.
+-	 */
+-	if (!err) {
+-		ops = iort_fwspec_iommu_ops(dev);
+-		err = iort_add_device_replay(dev);
+-	}
+-
+-	/* Ignore all other errors apart from EPROBE_DEFER */
+-	if (err == -EPROBE_DEFER) {
+-		ops = ERR_PTR(err);
+-	} else if (err) {
+-		dev_dbg(dev, "Adding to IOMMU failed: %d\n", err);
+-		ops = NULL;
+-	}
+-
+-	return ops;
++	return err;
+ }
+ 
+ #else
+ int iort_iommu_msi_get_resv_regions(struct device *dev, struct list_head *head)
+ { return 0; }
+-const struct iommu_ops *iort_iommu_configure_id(struct device *dev,
+-						const u32 *input_id)
+-{ return NULL; }
++int iort_iommu_configure_id(struct device *dev, const u32 *input_id)
++{ return -ENODEV; }
+ #endif
+ 
+ static int nc_dma_get_range(struct device *dev, u64 *size)
+diff --git a/drivers/acpi/scan.c b/drivers/acpi/scan.c
+index de0533bd4e08..ed8e8720f1d3 100644
+--- a/drivers/acpi/scan.c
++++ b/drivers/acpi/scan.c
+@@ -9,6 +9,7 @@
+ #include <linux/kernel.h>
+ #include <linux/acpi.h>
+ #include <linux/acpi_iort.h>
++#include <linux/iommu.h>
+ #include <linux/signal.h>
+ #include <linux/kthread.h>
+ #include <linux/dmi.h>
+@@ -1486,6 +1487,76 @@ int acpi_dma_get_range(struct device *dev, u64 *dma_addr, u64 *offset,
+ 	return ret >= 0 ? 0 : ret;
+ }
+ 
++#ifdef CONFIG_IOMMU_API
++int acpi_iommu_fwspec_init(struct device *dev, u32 id,
++			   struct fwnode_handle *fwnode,
++			   const struct iommu_ops *ops)
++{
++	int ret = iommu_fwspec_init(dev, fwnode, ops);
++
++	if (!ret)
++		ret = iommu_fwspec_add_ids(dev, &id, 1);
++
++	return ret;
++}
++
++static inline const struct iommu_ops *acpi_iommu_fwspec_ops(struct device *dev)
++{
++	struct iommu_fwspec *fwspec = dev_iommu_fwspec_get(dev);
++
++	return fwspec ? fwspec->ops : NULL;
++}
++
++static const struct iommu_ops *acpi_iommu_configure_id(struct device *dev,
++						       const u32 *id_in)
++{
++	int err;
++	const struct iommu_ops *ops;
++
++	/*
++	 * If we already translated the fwspec there is nothing left to do,
++	 * return the iommu_ops.
++	 */
++	ops = acpi_iommu_fwspec_ops(dev);
++	if (ops)
++		return ops;
++
++	err = iort_iommu_configure_id(dev, id_in);
++
++	/*
++	 * If we have reason to believe the IOMMU driver missed the initial
++	 * iommu_probe_device() call for dev, replay it to get things in order.
++	 */
++	if (!err && dev->bus && !device_iommu_mapped(dev))
++		err = iommu_probe_device(dev);
++
++	/* Ignore all other errors apart from EPROBE_DEFER */
++	if (err == -EPROBE_DEFER) {
++		return ERR_PTR(err);
++	} else if (err) {
++		dev_dbg(dev, "Adding to IOMMU failed: %d\n", err);
++		return NULL;
++	}
++	return acpi_iommu_fwspec_ops(dev);
++}
++
++#else /* !CONFIG_IOMMU_API */
++
++int acpi_iommu_fwspec_init(struct device *dev, u32 id,
++			   struct fwnode_handle *fwnode,
++			   const struct iommu_ops *ops)
++{
++	return -ENODEV;
++}
++
++static const struct iommu_ops *acpi_iommu_configure_id(struct device *dev,
++						       const u32 *id_in)
++{
++	return NULL;
++}
++
++#endif /* !CONFIG_IOMMU_API */
++
+ /**
+  * acpi_dma_configure_id - Set-up DMA configuration for the device.
+  * @dev: The pointer to the device
+@@ -1505,7 +1576,7 @@ int acpi_dma_configure_id(struct device *dev, enum dev_dma_attr attr,
+ 
+ 	iort_dma_setup(dev, &dma_addr, &size);
+ 
+-	iommu = iort_iommu_configure_id(dev, input_id);
++	iommu = acpi_iommu_configure_id(dev, input_id);
+ 	if (PTR_ERR(iommu) == -EPROBE_DEFER)
+ 		return -EPROBE_DEFER;
+ 
+diff --git a/include/acpi/acpi_bus.h b/include/acpi/acpi_bus.h
+index 37dac195adbb..31e36df15d37 100644
+--- a/include/acpi/acpi_bus.h
++++ b/include/acpi/acpi_bus.h
+@@ -587,6 +587,9 @@ struct acpi_pci_root {
+ 
+ bool acpi_dma_supported(struct acpi_device *adev);
+ enum dev_dma_attr acpi_get_dma_attr(struct acpi_device *adev);
++int acpi_iommu_fwspec_init(struct device *dev, u32 id,
++			   struct fwnode_handle *fwnode,
++			   const struct iommu_ops *ops);
+ int acpi_dma_get_range(struct device *dev, u64 *dma_addr, u64 *offset,
+ 		       u64 *size);
+ int acpi_dma_configure_id(struct device *dev, enum dev_dma_attr attr,
+diff --git a/include/linux/acpi_iort.h b/include/linux/acpi_iort.h
+index 1a12baa58e40..7cf7e7056265 100644
+--- a/include/linux/acpi_iort.h
++++ b/include/linux/acpi_iort.h
+@@ -35,8 +35,7 @@ void acpi_configure_pmsi_domain(struct device *dev);
+ int iort_pmsi_get_dev_id(struct device *dev, u32 *dev_id);
+ /* IOMMU interface */
+ void iort_dma_setup(struct device *dev, u64 *dma_addr, u64 *size);
+-const struct iommu_ops *iort_iommu_configure_id(struct device *dev,
+-						const u32 *id_in);
++int iort_iommu_configure_id(struct device *dev, const u32 *id_in);
+ int iort_iommu_msi_get_resv_regions(struct device *dev, struct list_head *head);
+ phys_addr_t acpi_iort_dma_get_max_cpu_address(void);
+ #else
+@@ -50,9 +49,8 @@ static inline void acpi_configure_pmsi_domain(struct device *dev) { }
+ /* IOMMU interface */
+ static inline void iort_dma_setup(struct device *dev, u64 *dma_addr,
+ 				  u64 *size) { }
+-static inline const struct iommu_ops *iort_iommu_configure_id(
+-				      struct device *dev, const u32 *id_in)
+-{ return NULL; }
++static inline int iort_iommu_configure_id(struct device *dev, const u32 *id_in)
++{ return -ENODEV; }
+ static inline
+ int iort_iommu_msi_get_resv_regions(struct device *dev, struct list_head *head)
+ { return 0; }
+-- 
+2.32.0
+

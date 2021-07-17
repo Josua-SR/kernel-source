@@ -1,0 +1,56 @@
+From 8a75871314c77a119360a69e91996edff78d7ab8 Mon Sep 17 00:00:00 2001
+From: Shameer Kolothum <shameerali.kolothum.thodi@huawei.com>
+Date: Fri, 16 Jul 2021 09:34:34 +0100
+Subject: [PATCH 37/60] iommu: Introduce a union to struct iommu_resv_region
+Patch-mainline: Submitted, Jon Nettleton et al
+References: bnc#0000000
+
+A union is introduced to struct iommu_resv_region to hold
+any firmware specific data. This is in preparation to add
+support for IORT RMR reserve regions and the union now holds
+the RMR specific information.
+
+Signed-off-by: Shameer Kolothum <shameerali.kolothum.thodi@huawei.com>
+---
+ include/linux/iommu.h | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/include/linux/iommu.h b/include/linux/iommu.h
+index e90c267e7f3e..b6e7be35aa5d 100644
+--- a/include/linux/iommu.h
++++ b/include/linux/iommu.h
+@@ -139,6 +139,13 @@ enum iommu_resv_type {
+ 	IOMMU_RESV_SW_MSI,
+ };
+ 
++struct iommu_iort_rmr_data {
++#define IOMMU_RMR_REMAP_PERMITTED	(1 << 0)
++	u32 flags;
++	u32 sid;	/* Stream Id associated with RMR entry */
++	void *smmu;	/* Associated IORT SMMU node pointer */
++};
++
+ /**
+  * struct iommu_resv_region - descriptor for a reserved memory region
+  * @list: Linked list pointers
+@@ -146,6 +153,7 @@ enum iommu_resv_type {
+  * @length: Length of the region in bytes
+  * @prot: IOMMU Protection flags (READ/WRITE/...)
+  * @type: Type of the reserved region
++ * @rmr: ACPI IORT RMR specific data
+  */
+ struct iommu_resv_region {
+ 	struct list_head	list;
+@@ -153,6 +161,9 @@ struct iommu_resv_region {
+ 	size_t			length;
+ 	int			prot;
+ 	enum iommu_resv_type	type;
++	union {
++		struct iommu_iort_rmr_data rmr;
++	} fw_data;
+ };
+ 
+ /* Per device IOMMU features */
+-- 
+2.32.0
+

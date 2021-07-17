@@ -1,0 +1,59 @@
+From fb51d42d2752f8af5837a10a226f9ce94317b2c8 Mon Sep 17 00:00:00 2001
+From: Jon Nettleton <jon@solid-run.com>
+Date: Fri, 2 Jul 2021 07:28:21 -0400
+Subject: [PATCH 57/60] ACPI: APD: Allow apd device to override fixed_clk_rate
+Patch-mainline: Submitted, Jon Nettleton et al
+References: bnc#0000000
+
+Currently by default the apd drivers are always using the
+fixed_clk_rate assigned in the matched acpi_device_desc.
+This causes an issue on the LX2160a platform because the
+NXP0001 settings do not match the platform and instead the
+I2C bus is only running at 24000kHZ rather than the expect
+100000. Instead of patching the source with more static numbers
+that may or may not change instead add a check for the device
+property "fixed-clock-rate" that can be added to the ACPI
+tables to instruct the driver what rate to use.
+
+I have chosen fixed-clock-rate because clock-frequency is already
+used by I2C devices in acpi and device-tree to specify by bus
+speed, and fixed-clock-rate matches the fixed_clk_rate used by the
+apd_device_desc.  If this device property is not set then the
+default static values are used so this should cause no regressions.
+
+Signed-off-by: Jon Nettleton <jon@solid-run.com>
+---
+ drivers/acpi/acpi_apd.c | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/acpi/acpi_apd.c b/drivers/acpi/acpi_apd.c
+index 645e82a66bb0..fdb53ae08882 100644
+--- a/drivers/acpi/acpi_apd.c
++++ b/drivers/acpi/acpi_apd.c
+@@ -46,12 +46,21 @@ struct apd_private_data {
+ static int acpi_apd_setup(struct apd_private_data *pdata)
+ {
+ 	const struct apd_device_desc *dev_desc = pdata->dev_desc;
++	struct acpi_device *adev = pdata->adev;
++	const union acpi_object *obj;
++	unsigned int fixed_clk_rate;
+ 	struct clk *clk;
+ 
+-	if (dev_desc->fixed_clk_rate) {
++	if (!acpi_dev_get_property(adev, "uefi-clock-frequency", ACPI_TYPE_INTEGER, &obj)) {
++		fixed_clk_rate = obj->integer.value;
++	} else if (dev_desc->fixed_clk_rate) {
++		fixed_clk_rate = dev_desc->fixed_clk_rate;
++	}
++
++	if (fixed_clk_rate) {
+ 		clk = clk_register_fixed_rate(&pdata->adev->dev,
+ 					dev_name(&pdata->adev->dev),
+-					NULL, 0, dev_desc->fixed_clk_rate);
++					NULL, 0, fixed_clk_rate);
+ 		clk_register_clkdev(clk, NULL, dev_name(&pdata->adev->dev));
+ 		pdata->clk = clk;
+ 	}
+-- 
+2.32.0
+

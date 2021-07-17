@@ -1,0 +1,101 @@
+From cdb7dcf6b7d7afdf47b193449701d4c46dddabe0 Mon Sep 17 00:00:00 2001
+From: Shameer Kolothum <shameerali.kolothum.thodi@huawei.com>
+Date: Fri, 16 Jul 2021 09:34:36 +0100
+Subject: [PATCH 39/60] iommu/dma: Introduce generic helper to retrieve RMR
+ info
+Patch-mainline: Submitted, Jon Nettleton et al
+References: bnc#0000000
+
+Reserved Memory Regions(RMR) associated with an IOMMU can be
+described through ACPI IORT tables in systems with devices
+that require a unity mapping or bypass for those
+regions.
+
+Introduce a generic interface so that IOMMU drivers can retrieve
+and set up necessary mappings.
+
+Signed-off-by: Shameer Kolothum <shameerali.kolothum.thodi@huawei.com>
+---
+ drivers/iommu/dma-iommu.c | 29 +++++++++++++++++++++++++++++
+ include/linux/dma-iommu.h | 13 +++++++++++++
+ 2 files changed, 42 insertions(+)
+
+diff --git a/drivers/iommu/dma-iommu.c b/drivers/iommu/dma-iommu.c
+index d1539b7399a9..30860ade92b6 100644
+--- a/drivers/iommu/dma-iommu.c
++++ b/drivers/iommu/dma-iommu.c
+@@ -147,6 +147,35 @@ void iommu_put_dma_cookie(struct iommu_domain *domain)
+ }
+ EXPORT_SYMBOL(iommu_put_dma_cookie);
+ 
++/**
++ *
++ * iommu_dma_get_rmrs - Retrieve Reserved Memory Regions(RMRs) associated
++ *                      with a given IOMMU
++ * @iommu_fwnode: fwnode associated with IOMMU
++ * @list: RMR list to be populated
++ *
++ */
++int iommu_dma_get_rmrs(struct fwnode_handle *iommu_fwnode,
++		       struct list_head *list)
++{
++	return -EINVAL;
++}
++EXPORT_SYMBOL(iommu_dma_get_rmrs);
++
++/**
++ *
++ * iommu_dma_put_rmrs - Release Reserved Memory Regions(RMRs) associated
++ *                      with a given IOMMU
++ * @iommu_fwnode: fwnode associated with IOMMU
++ * @list: RMR list
++ *
++ */
++void iommu_dma_put_rmrs(struct fwnode_handle *iommu_fwnode,
++			struct list_head *list)
++{
++}
++EXPORT_SYMBOL(iommu_dma_put_rmrs);
++
+ /**
+  * iommu_dma_get_resv_regions - Reserved region driver helper
+  * @dev: Device from iommu_get_resv_regions()
+diff --git a/include/linux/dma-iommu.h b/include/linux/dma-iommu.h
+index 2112f21f73d8..66444d580979 100644
+--- a/include/linux/dma-iommu.h
++++ b/include/linux/dma-iommu.h
+@@ -37,12 +37,16 @@ void iommu_dma_compose_msi_msg(struct msi_desc *desc,
+ 
+ void iommu_dma_get_resv_regions(struct device *dev, struct list_head *list);
+ 
++int iommu_dma_get_rmrs(struct fwnode_handle *iommu, struct list_head *list);
++void iommu_dma_put_rmrs(struct fwnode_handle *iommu, struct list_head *list);
++
+ #else /* CONFIG_IOMMU_DMA */
+ 
+ struct iommu_domain;
+ struct msi_desc;
+ struct msi_msg;
+ struct device;
++struct fwnode_handle;
+ 
+ static inline void iommu_setup_dma_ops(struct device *dev, u64 dma_base,
+ 		u64 size)
+@@ -78,5 +82,14 @@ static inline void iommu_dma_get_resv_regions(struct device *dev, struct list_he
+ {
+ }
+ 
++static int iommu_dma_get_rmrs(struct fwnode_handle *iommu, struct list_head *list)
++{
++	return -ENODEV;
++}
++
++static void iommu_dma_put_rmrs(struct fwnode_handle *iommu, struct list_head *list)
++{
++}
++
+ #endif	/* CONFIG_IOMMU_DMA */
+ #endif	/* __DMA_IOMMU_H */
+-- 
+2.32.0
+

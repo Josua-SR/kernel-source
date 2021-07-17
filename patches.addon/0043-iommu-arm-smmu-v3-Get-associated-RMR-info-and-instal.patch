@@ -1,0 +1,73 @@
+From a6780373769fcdba36352367b1255db5a788cfc3 Mon Sep 17 00:00:00 2001
+From: Shameer Kolothum <shameerali.kolothum.thodi@huawei.com>
+Date: Fri, 16 Jul 2021 09:34:40 +0100
+Subject: [PATCH 43/60] iommu/arm-smmu-v3: Get associated RMR info and install
+ bypass STE
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Patch-mainline: Submitted, Jon Nettleton et al
+References: bnc#0000000
+
+Check if there is any RMR info associated with the devices behind
+the SMMUv3 and if any, install bypass STEs for them. This is to
+keep any ongoing traffic associated with these devices alive
+when we enable/reset SMMUv3 during probe().
+
+Signed-off-by: Shameer Kolothum <shameerali.kolothum.thodi@huawei.com>
+---
+ drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c | 31 +++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
+index 820618335509..527b599754c8 100644
+--- a/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
++++ b/drivers/iommu/arm/arm-smmu-v3/arm-smmu-v3.c
+@@ -3595,6 +3595,34 @@ static void __iomem *arm_smmu_ioremap(struct device *dev, resource_size_t start,
+ 	return devm_ioremap_resource(dev, &res);
+ }
+ 
++static void arm_smmu_rmr_install_bypass_ste(struct arm_smmu_device *smmu)
++{
++	struct list_head rmr_list;
++	struct iommu_resv_region *e;
++	int ret;
++
++	INIT_LIST_HEAD(&rmr_list);
++	if (iommu_dma_get_rmrs(dev_fwnode(smmu->dev), &rmr_list))
++		return;
++
++	list_for_each_entry(e, &rmr_list, list) {
++		__le64 *step;
++		u32 sid = e->fw_data.rmr.sid;
++
++		ret = arm_smmu_init_sid_strtab(smmu, sid);
++		if (ret) {
++			dev_err(smmu->dev, "RMR SID(0x%x) bypass failed\n",
++				sid);
++			continue;
++		}
++
++		step = arm_smmu_get_step_for_sid(smmu, sid);
++		arm_smmu_init_bypass_stes(step, 1, true);
++	}
++
++	iommu_dma_put_rmrs(dev_fwnode(smmu->dev), &rmr_list);
++}
++
+ static int arm_smmu_device_probe(struct platform_device *pdev)
+ {
+ 	int irq, ret;
+@@ -3678,6 +3706,9 @@ static int arm_smmu_device_probe(struct platform_device *pdev)
+ 	/* Record our private device structure */
+ 	platform_set_drvdata(pdev, smmu);
+ 
++	/* Check for RMRs and install bypass STEs if any */
++	arm_smmu_rmr_install_bypass_ste(smmu);
++
+ 	/* Reset the device */
+ 	ret = arm_smmu_device_reset(smmu, bypass);
+ 	if (ret)
+-- 
+2.32.0
+

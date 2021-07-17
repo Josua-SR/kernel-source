@@ -1,0 +1,71 @@
+From f8d11cdbd421871e1aa6378a5e83002678a1e704 Mon Sep 17 00:00:00 2001
+From: Calvin Johnson <calvin.johnson@oss.nxp.com>
+Date: Fri, 11 Jun 2021 13:54:00 +0300
+Subject: [PATCH 35/60] net: phylink: Refactor phylink_of_phy_connect()
+Patch-mainline: Submitted, Jon Nettleton et al
+References: bnc#0000000
+
+Refactor phylink_of_phy_connect() to use phylink_fwnode_phy_connect().
+
+Signed-off-by: Calvin Johnson <calvin.johnson@oss.nxp.com>
+Signed-off-by: Ioana Ciornei <ioana.ciornei@nxp.com>
+Acked-by: Grant Likely <grant.likely@arm.com>
+Reviewed-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
+Signed-off-by: David S. Miller <davem@davemloft.net>
+---
+ drivers/net/phy/phylink.c | 39 +--------------------------------------
+ 1 file changed, 1 insertion(+), 38 deletions(-)
+
+diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
+index c18d8c0a7bb3..9c1d3946f353 100644
+--- a/drivers/net/phy/phylink.c
++++ b/drivers/net/phy/phylink.c
+@@ -1080,44 +1080,7 @@ EXPORT_SYMBOL_GPL(phylink_connect_phy);
+ int phylink_of_phy_connect(struct phylink *pl, struct device_node *dn,
+ 			   u32 flags)
+ {
+-	struct device_node *phy_node;
+-	struct phy_device *phy_dev;
+-	int ret;
+-
+-	/* Fixed links and 802.3z are handled without needing a PHY */
+-	if (pl->cfg_link_an_mode == MLO_AN_FIXED ||
+-	    (pl->cfg_link_an_mode == MLO_AN_INBAND &&
+-	     phy_interface_mode_is_8023z(pl->link_interface)))
+-		return 0;
+-
+-	phy_node = of_parse_phandle(dn, "phy-handle", 0);
+-	if (!phy_node)
+-		phy_node = of_parse_phandle(dn, "phy", 0);
+-	if (!phy_node)
+-		phy_node = of_parse_phandle(dn, "phy-device", 0);
+-
+-	if (!phy_node) {
+-		if (pl->cfg_link_an_mode == MLO_AN_PHY)
+-			return -ENODEV;
+-		return 0;
+-	}
+-
+-	phy_dev = of_phy_find_device(phy_node);
+-	/* We're done with the phy_node handle */
+-	of_node_put(phy_node);
+-	if (!phy_dev)
+-		return -ENODEV;
+-
+-	ret = phy_attach_direct(pl->netdev, phy_dev, flags,
+-				pl->link_interface);
+-	if (ret)
+-		return ret;
+-
+-	ret = phylink_bringup_phy(pl, phy_dev, pl->link_config.interface);
+-	if (ret)
+-		phy_detach(phy_dev);
+-
+-	return ret;
++	return phylink_fwnode_phy_connect(pl, of_fwnode_handle(dn), flags);
+ }
+ EXPORT_SYMBOL_GPL(phylink_of_phy_connect);
+ 
+-- 
+2.32.0
+

@@ -1,0 +1,334 @@
+From 6dae10a3a7226e72c8a5f6fd4b2f5c9bdf3b28ae Mon Sep 17 00:00:00 2001
+From: Calvin Johnson <calvin.johnson@oss.nxp.com>
+Date: Fri, 11 Jun 2021 13:53:54 +0300
+Subject: [PATCH 29/60] net: mdiobus: Introduce fwnode_mdiobus_register_phy()
+Patch-mainline: Submitted, Jon Nettleton et al
+References: bnc#0000000
+
+Introduce fwnode_mdiobus_register_phy() to register PHYs on the
+mdiobus. From the compatible string, identify whether the PHY is
+c45 and based on this create a PHY device instance which is
+registered on the mdiobus.
+
+Along with fwnode_mdiobus_register_phy() also introduce
+fwnode_find_mii_timestamper() and fwnode_mdiobus_phy_device_register()
+since they are needed.
+While at it, also use the newly introduced fwnode operation in
+of_mdiobus_phy_device_register().
+
+Signed-off-by: Calvin Johnson <calvin.johnson@oss.nxp.com>
+Signed-off-by: Ioana Ciornei <ioana.ciornei@nxp.com>
+Acked-by: Grant Likely <grant.likely@arm.com>
+Signed-off-by: David S. Miller <davem@davemloft.net>
+---
+ MAINTAINERS                    |   1 +
+ drivers/net/mdio/Kconfig       |   7 ++
+ drivers/net/mdio/Makefile      |   3 +-
+ drivers/net/mdio/fwnode_mdio.c | 144 +++++++++++++++++++++++++++++++++
+ drivers/net/mdio/of_mdio.c     |  44 ++--------
+ include/linux/fwnode_mdio.h    |  35 ++++++++
+ 6 files changed, 194 insertions(+), 40 deletions(-)
+ create mode 100644 drivers/net/mdio/fwnode_mdio.c
+ create mode 100644 include/linux/fwnode_mdio.h
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 7d5849489058..5ea268051057 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -6585,6 +6585,7 @@ F:	Documentation/devicetree/bindings/net/mdio*
+ F:	Documentation/devicetree/bindings/net/qca,ar803x.yaml
+ F:	Documentation/networking/phy.rst
+ F:	drivers/net/mdio/
++F:	drivers/net/mdio/fwnode_mdio.c
+ F:	drivers/net/mdio/of_mdio.c
+ F:	drivers/net/pcs/
+ F:	drivers/net/phy/
+diff --git a/drivers/net/mdio/Kconfig b/drivers/net/mdio/Kconfig
+index a10cc460d7cf..d808a2a0a376 100644
+--- a/drivers/net/mdio/Kconfig
++++ b/drivers/net/mdio/Kconfig
+@@ -19,6 +19,13 @@ config MDIO_BUS
+ 	  reflects whether the mdio_bus/mdio_device code is built as a
+ 	  loadable module or built-in.
+ 
++config FWNODE_MDIO
++	def_tristate PHYLIB
++	depends on (ACPI || OF) || COMPILE_TEST
++	select FIXED_PHY
++	help
++	  FWNODE MDIO bus (Ethernet PHY) accessors
++
+ config OF_MDIO
+ 	def_tristate PHYLIB
+ 	depends on OF
+diff --git a/drivers/net/mdio/Makefile b/drivers/net/mdio/Makefile
+index 5c498dde463f..ea5390e2ef84 100644
+--- a/drivers/net/mdio/Makefile
++++ b/drivers/net/mdio/Makefile
+@@ -1,7 +1,8 @@
+ # SPDX-License-Identifier: GPL-2.0
+ # Makefile for Linux MDIO bus drivers
+ 
+-obj-$(CONFIG_OF_MDIO)	+= of_mdio.o
++obj-$(CONFIG_FWNODE_MDIO)	+= fwnode_mdio.o
++obj-$(CONFIG_OF_MDIO)		+= of_mdio.o
+ 
+ obj-$(CONFIG_MDIO_ASPEED)		+= mdio-aspeed.o
+ obj-$(CONFIG_MDIO_BCM_IPROC)		+= mdio-bcm-iproc.o
+diff --git a/drivers/net/mdio/fwnode_mdio.c b/drivers/net/mdio/fwnode_mdio.c
+new file mode 100644
+index 000000000000..e96766da8de4
+--- /dev/null
++++ b/drivers/net/mdio/fwnode_mdio.c
+@@ -0,0 +1,144 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * fwnode helpers for the MDIO (Ethernet PHY) API
++ *
++ * This file provides helper functions for extracting PHY device information
++ * out of the fwnode and using it to populate an mii_bus.
++ */
++
++#include <linux/acpi.h>
++#include <linux/fwnode_mdio.h>
++#include <linux/of.h>
++#include <linux/phy.h>
++
++MODULE_AUTHOR("Calvin Johnson <calvin.johnson@oss.nxp.com>");
++MODULE_LICENSE("GPL");
++
++static struct mii_timestamper *
++fwnode_find_mii_timestamper(struct fwnode_handle *fwnode)
++{
++	struct of_phandle_args arg;
++	int err;
++
++	if (is_acpi_node(fwnode))
++		return NULL;
++
++	err = of_parse_phandle_with_fixed_args(to_of_node(fwnode),
++					       "timestamper", 1, 0, &arg);
++	if (err == -ENOENT)
++		return NULL;
++	else if (err)
++		return ERR_PTR(err);
++
++	if (arg.args_count != 1)
++		return ERR_PTR(-EINVAL);
++
++	return register_mii_timestamper(arg.np, arg.args[0]);
++}
++
++int fwnode_mdiobus_phy_device_register(struct mii_bus *mdio,
++				       struct phy_device *phy,
++				       struct fwnode_handle *child, u32 addr)
++{
++	int rc;
++
++	rc = fwnode_irq_get(child, 0);
++	if (rc == -EPROBE_DEFER)
++		return rc;
++
++	if (rc > 0) {
++		phy->irq = rc;
++		mdio->irq[addr] = rc;
++	} else {
++		phy->irq = mdio->irq[addr];
++	}
++
++	if (fwnode_property_read_bool(child, "broken-turn-around"))
++		mdio->phy_ignore_ta_mask |= 1 << addr;
++
++	fwnode_property_read_u32(child, "reset-assert-us",
++				 &phy->mdio.reset_assert_delay);
++	fwnode_property_read_u32(child, "reset-deassert-us",
++				 &phy->mdio.reset_deassert_delay);
++
++	/* Associate the fwnode with the device structure so it
++	 * can be looked up later
++	 */
++	fwnode_handle_get(child);
++	phy->mdio.dev.fwnode = child;
++
++	/* All data is now stored in the phy struct;
++	 * register it
++	 */
++	rc = phy_device_register(phy);
++	if (rc) {
++		fwnode_handle_put(child);
++		return rc;
++	}
++
++	dev_dbg(&mdio->dev, "registered phy %p fwnode at address %i\n",
++		child, addr);
++	return 0;
++}
++EXPORT_SYMBOL(fwnode_mdiobus_phy_device_register);
++
++int fwnode_mdiobus_register_phy(struct mii_bus *bus,
++				struct fwnode_handle *child, u32 addr)
++{
++	struct mii_timestamper *mii_ts = NULL;
++	struct phy_device *phy;
++	bool is_c45 = false;
++	u32 phy_id;
++	int rc;
++
++	mii_ts = fwnode_find_mii_timestamper(child);
++	if (IS_ERR(mii_ts))
++		return PTR_ERR(mii_ts);
++
++	rc = fwnode_property_match_string(child, "compatible",
++					  "ethernet-phy-ieee802.3-c45");
++	if (rc >= 0)
++		is_c45 = true;
++
++	if (is_c45 || fwnode_get_phy_id(child, &phy_id))
++		phy = get_phy_device(bus, addr, is_c45);
++	else
++		phy = phy_device_create(bus, addr, phy_id, 0, NULL);
++	if (IS_ERR(phy)) {
++		unregister_mii_timestamper(mii_ts);
++		return PTR_ERR(phy);
++	}
++
++	if (is_acpi_node(child)) {
++		phy->irq = bus->irq[addr];
++
++		/* Associate the fwnode with the device structure so it
++		 * can be looked up later.
++		 */
++		phy->mdio.dev.fwnode = child;
++
++		/* All data is now stored in the phy struct, so register it */
++		rc = phy_device_register(phy);
++		if (rc) {
++			phy_device_free(phy);
++			fwnode_handle_put(phy->mdio.dev.fwnode);
++			return rc;
++		}
++	} else if (is_of_node(child)) {
++		rc = fwnode_mdiobus_phy_device_register(bus, phy, child, addr);
++		if (rc) {
++			unregister_mii_timestamper(mii_ts);
++			phy_device_free(phy);
++			return rc;
++		}
++	}
++
++	/* phy->mii_ts may already be defined by the PHY driver. A
++	 * mii_timestamper probed via the device tree will still have
++	 * precedence.
++	 */
++	if (mii_ts)
++		phy->mii_ts = mii_ts;
++	return 0;
++}
++EXPORT_SYMBOL(fwnode_mdiobus_register_phy);
+diff --git a/drivers/net/mdio/of_mdio.c b/drivers/net/mdio/of_mdio.c
+index c926442dca82..422ea104e26c 100644
+--- a/drivers/net/mdio/of_mdio.c
++++ b/drivers/net/mdio/of_mdio.c
+@@ -12,6 +12,7 @@
+ #include <linux/device.h>
+ #include <linux/netdevice.h>
+ #include <linux/err.h>
++#include <linux/fwnode_mdio.h>
+ #include <linux/phy.h>
+ #include <linux/phy_fixed.h>
+ #include <linux/of.h>
+@@ -51,46 +52,11 @@ static struct mii_timestamper *of_find_mii_timestamper(struct device_node *node)
+ }
+ 
+ int of_mdiobus_phy_device_register(struct mii_bus *mdio, struct phy_device *phy,
+-			      struct device_node *child, u32 addr)
++				   struct device_node *child, u32 addr)
+ {
+-	int rc;
+-
+-	rc = of_irq_get(child, 0);
+-	if (rc == -EPROBE_DEFER)
+-		return rc;
+-
+-	if (rc > 0) {
+-		phy->irq = rc;
+-		mdio->irq[addr] = rc;
+-	} else {
+-		phy->irq = mdio->irq[addr];
+-	}
+-
+-	if (of_property_read_bool(child, "broken-turn-around"))
+-		mdio->phy_ignore_ta_mask |= 1 << addr;
+-
+-	of_property_read_u32(child, "reset-assert-us",
+-			     &phy->mdio.reset_assert_delay);
+-	of_property_read_u32(child, "reset-deassert-us",
+-			     &phy->mdio.reset_deassert_delay);
+-
+-	/* Associate the OF node with the device structure so it
+-	 * can be looked up later */
+-	of_node_get(child);
+-	phy->mdio.dev.of_node = child;
+-	phy->mdio.dev.fwnode = of_fwnode_handle(child);
+-
+-	/* All data is now stored in the phy struct;
+-	 * register it */
+-	rc = phy_device_register(phy);
+-	if (rc) {
+-		of_node_put(child);
+-		return rc;
+-	}
+-
+-	dev_dbg(&mdio->dev, "registered phy %pOFn at address %i\n",
+-		child, addr);
+-	return 0;
++	return fwnode_mdiobus_phy_device_register(mdio, phy,
++						  of_fwnode_handle(child),
++						  addr);
+ }
+ EXPORT_SYMBOL(of_mdiobus_phy_device_register);
+ 
+diff --git a/include/linux/fwnode_mdio.h b/include/linux/fwnode_mdio.h
+new file mode 100644
+index 000000000000..faf603c48c86
+--- /dev/null
++++ b/include/linux/fwnode_mdio.h
+@@ -0,0 +1,35 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * FWNODE helper for the MDIO (Ethernet PHY) API
++ */
++
++#ifndef __LINUX_FWNODE_MDIO_H
++#define __LINUX_FWNODE_MDIO_H
++
++#include <linux/phy.h>
++
++#if IS_ENABLED(CONFIG_FWNODE_MDIO)
++int fwnode_mdiobus_phy_device_register(struct mii_bus *mdio,
++				       struct phy_device *phy,
++				       struct fwnode_handle *child, u32 addr);
++
++int fwnode_mdiobus_register_phy(struct mii_bus *bus,
++				struct fwnode_handle *child, u32 addr);
++
++#else /* CONFIG_FWNODE_MDIO */
++int fwnode_mdiobus_phy_device_register(struct mii_bus *mdio,
++				       struct phy_device *phy,
++				       struct fwnode_handle *child, u32 addr)
++{
++	return -EINVAL;
++}
++
++static inline int fwnode_mdiobus_register_phy(struct mii_bus *bus,
++					      struct fwnode_handle *child,
++					      u32 addr)
++{
++	return -EINVAL;
++}
++#endif
++
++#endif /* __LINUX_FWNODE_MDIO_H */
+-- 
+2.32.0
+

@@ -1,0 +1,40 @@
+From b7a308d5ab7c93e2347278d95532fa03474f4f41 Mon Sep 17 00:00:00 2001
+From: Laurentiu Tudor <laurentiu.tudor@nxp.com>
+Date: Thu, 15 Jul 2021 17:07:13 +0300
+Subject: [PATCH 49/60] bus: fsl-mc: fully resume the firmware
+Patch-mainline: Submitted, Jon Nettleton et al
+References: bnc#0000000
+
+The MC firmware has two execution units. Resume them both, as on some
+Layerscape SoCs not doing so breaks the firmware.
+
+Signed-off-by: Laurentiu Tudor <laurentiu.tudor@nxp.com>
+---
+ drivers/bus/fsl-mc/fsl-mc-bus.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/bus/fsl-mc/fsl-mc-bus.c b/drivers/bus/fsl-mc/fsl-mc-bus.c
+index 138fc49ffe9c..78866e46259a 100644
+--- a/drivers/bus/fsl-mc/fsl-mc-bus.c
++++ b/drivers/bus/fsl-mc/fsl-mc-bus.c
+@@ -62,6 +62,7 @@ struct fsl_mc_addr_translation_range {
+ 
+ #define FSL_MC_GCR1	0x0
+ #define GCR1_P1_STOP	BIT(31)
++#define GCR1_P2_STOP	BIT(30)
+ 
+ #define FSL_MC_FAPR	0x28
+ #define MC_FAPR_PL	BIT(18)
+@@ -1117,7 +1118,8 @@ static int fsl_mc_bus_probe(struct platform_device *pdev)
+ 		 * At this point MC should have all its SMMU setup done so make
+ 		 * sure it is resumed.
+ 		 */
+-		writel(readl(mc->fsl_mc_regs + FSL_MC_GCR1) & (~GCR1_P1_STOP),
++		writel(readl(mc->fsl_mc_regs + FSL_MC_GCR1) &
++			     (~(GCR1_P1_STOP | GCR1_P2_STOP)),
+ 		       mc->fsl_mc_regs + FSL_MC_GCR1);
+ 	}
+ 
+-- 
+2.32.0
+
