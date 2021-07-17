@@ -79,8 +79,8 @@ tag_map = {
                 'excludes' : [ 'Git-commit', 'Git-repo' ],
             },
         ],
-        'requires_any' : [ 'Signed-off-by:SUSE', 'Acked-by:SUSE', 'From:SUSE',
-                           'Reviewed-by:SUSE' ],
+#        'requires_any' : [ 'Signed-off-by:SUSE', 'Acked-by:SUSE', 'From:SUSE',
+#                           'Reviewed-by:SUSE' ],
     },
     'Git-commit' : {
         'multi' : True,
