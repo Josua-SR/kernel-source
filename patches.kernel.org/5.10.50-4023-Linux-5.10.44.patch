@@ -1,0 +1,42 @@
+From f2b1fc360fa1283b61359f232c6965f4170260f0 Mon Sep 17 00:00:00 2001
+From: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Date: Wed, 16 Jun 2021 12:01:47 +0200
+Subject: [PATCH 4023/4917] Linux 5.10.44
+Patch-mainline: 5.10.50
+References: bsc#0000000
+Git-commit: f2b1fc360fa1283b61359f232c6965f4170260f0
+
+Link: https://lore.kernel.org/r/20210614102652.964395392@linuxfoundation.org
+Tested-by: Fox Chen <foxhlchen@gmail.com>
+Tested-by: Jon Hunter <jonathanh@nvidia.com>
+Tested-by: Florian Fainelli <f.fainelli@gmail.com>
+Tested-by: Pavel Machek (CIP) <pavel@denx.de>
+Tested-by: Hulk Robot <hulkrobot@huawei.com>
+Link: https://lore.kernel.org/r/20210614161424.091266895@linuxfoundation.org
+Tested-by: Salvatore Bonaccorso <carnil@debian.org>
+Tested-by: Shuah Khan <skhan@linuxfoundation.org>
+Tested-by: Jason Self <jason@bluehome.net>
+Tested-by: Sudip Mukherjee <sudip.mukherjee@codethink.co.uk>
+Tested-by: Guenter Roeck <linux@roeck-us.net>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index ec9ee8032a98..ae33e048eb8d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,7 +1,7 @@
+ # SPDX-License-Identifier: GPL-2.0
+ VERSION = 5
+ PATCHLEVEL = 10
+-SUBLEVEL = 43
++SUBLEVEL = 44
+ EXTRAVERSION =
+ NAME = Dare mighty things
+ 
+-- 
+2.32.0
+

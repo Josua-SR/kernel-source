@@ -1,0 +1,38 @@
+From ede8be3ae078113fb536159a548890ecc39fbc87 Mon Sep 17 00:00:00 2001
+From: Masahiro Yamada <masahiroy@kernel.org>
+Date: Sun, 28 Feb 2021 15:10:25 +0900
+Subject: [PATCH 1492/4917] kbuild: add image_name to no-sync-config-targets
+Patch-mainline: 5.10.50
+References: bsc#0000000
+Git-commit: ede8be3ae078113fb536159a548890ecc39fbc87
+
+[ Upstream commit 993bdde94547887faaad4a97f0b0480a6da271c3 ]
+
+'make image_name' needs include/config/auto.conf to show the correct
+output because KBUILD_IMAGE depends on CONFIG options, but should not
+attempt to resync the configuration.
+
+Signed-off-by: Masahiro Yamada <masahiroy@kernel.org>
+Signed-off-by: Sasha Levin <sashal@kernel.org>
+
+---
+ Makefile | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index d4b87e604762..cb9a1592f72c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -265,7 +265,8 @@ no-dot-config-targets := $(clean-targets) \
+ 			 $(version_h) headers headers_% archheaders archscripts \
+ 			 %asm-generic kernelversion %src-pkg dt_binding_check \
+ 			 outputmakefile
+-no-sync-config-targets := $(no-dot-config-targets) %install kernelrelease
++no-sync-config-targets := $(no-dot-config-targets) %install kernelrelease \
++			  image_name
+ single-targets := %.a %.i %.ko %.lds %.ll %.lst %.mod %.o %.s %.symtypes %/
+ 
+ config-build	:=
+-- 
+2.32.0
+

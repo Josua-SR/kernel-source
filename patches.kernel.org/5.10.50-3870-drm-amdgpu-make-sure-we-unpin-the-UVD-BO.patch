@@ -1,0 +1,42 @@
+From 3a6b69221f96f87c680bbc9fba01db3415b18f27 Mon Sep 17 00:00:00 2001
+From: Nirmoy Das <nirmoy.das@amd.com>
+Date: Fri, 28 May 2021 16:54:16 +0200
+Subject: [PATCH 3870/4917] drm/amdgpu: make sure we unpin the UVD BO
+Mime-version: 1.0
+Content-type: text/plain; charset=UTF-8
+Content-transfer-encoding: 8bit
+Patch-mainline: 5.10.50
+References: bsc#0000000
+Git-commit: 3a6b69221f96f87c680bbc9fba01db3415b18f27
+
+commit 07438603a07e52f1c6aa731842bd298d2725b7be upstream.
+
+Releasing pinned BOs is illegal now. UVD 6 was missing from:
+commit 2f40801dc553 ("drm/amdgpu: make sure we unpin the UVD BO")
+
+Fixes: 2f40801dc553 ("drm/amdgpu: make sure we unpin the UVD BO")
+Cc: stable@vger.kernel.org
+Signed-off-by: Nirmoy Das <nirmoy.das@amd.com>
+Reviewed-by: Christian König <christian.koenig@amd.com>
+Signed-off-by: Alex Deucher <alexander.deucher@amd.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+
+---
+ drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c b/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c
+index 666bfa4a0b8e..53f0899eb316 100644
+--- a/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c
++++ b/drivers/gpu/drm/amd/amdgpu/uvd_v6_0.c
+@@ -356,6 +356,7 @@ static int uvd_v6_0_enc_ring_test_ib(struct amdgpu_ring *ring, long timeout)
+ 
+ error:
+ 	dma_fence_put(fence);
++	amdgpu_bo_unpin(bo);
+ 	amdgpu_bo_unreserve(bo);
+ 	amdgpu_bo_unref(&bo);
+ 	return r;
+-- 
+2.32.0
+

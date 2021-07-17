@@ -1,0 +1,31 @@
+From 2934985086b95c45273d159f06bd72aecb8da364 Mon Sep 17 00:00:00 2001
+From: "David S. Miller" <davem@davemloft.net>
+Date: Wed, 24 Mar 2021 16:42:54 -0700
+Subject: [PATCH 1822/4917] math: Export mul_u64_u64_div_u64
+Patch-mainline: 5.10.50
+References: bsc#0000000
+Git-commit: 2934985086b95c45273d159f06bd72aecb8da364
+
+[ Upstream commit bf45947864764548697e7515fe693e10f173f312 ]
+
+Fixes: f51d7bf1dbe5 ("ptp_qoriq: fix overflow in ptp_qoriq_adjfine() u64 calcalation")
+Signed-off-by: David S. Miller <davem@davemloft.net>
+Signed-off-by: Sasha Levin <sashal@kernel.org>
+
+---
+ lib/math/div64.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/lib/math/div64.c b/lib/math/div64.c
+index 3952a07130d8..edd1090c9edb 100644
+--- a/lib/math/div64.c
++++ b/lib/math/div64.c
+@@ -230,4 +230,5 @@ u64 mul_u64_u64_div_u64(u64 a, u64 b, u64 c)
+ 
+ 	return res + div64_u64(a * b, c);
+ }
++EXPORT_SYMBOL(mul_u64_u64_div_u64);
+ #endif
+-- 
+2.32.0
+

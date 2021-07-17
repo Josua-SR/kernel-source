@@ -1,0 +1,46 @@
+From 0e3045c15ff9d44e7ac56c0f70d671ac03694bb2 Mon Sep 17 00:00:00 2001
+From: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Date: Thu, 13 May 2021 21:40:38 +0200
+Subject: [PATCH 3749/4917] Revert "Revert "ALSA: usx2y: Fix potential NULL
+ pointer dereference""
+Patch-mainline: 5.10.50
+References: bsc#0000000
+Git-commit: 0e3045c15ff9d44e7ac56c0f70d671ac03694bb2
+
+commit 27b57bb76a897be80494ee11ee4e85326d19383d upstream.
+
+This reverts commit 4667a6fc1777ce071504bab570d3599107f4790f.
+
+Takashi writes:
+	I have already started working on the bigger cleanup of this driver
+	code based on 5.13-rc1, so could you drop this revert?
+
+I missed our previous discussion about this, my fault for applying it.
+
+Reported-by: Takashi Iwai <tiwai@suse.de>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+
+---
+ sound/usb/usx2y/usb_stream.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/sound/usb/usx2y/usb_stream.c b/sound/usb/usx2y/usb_stream.c
+index 6bba17bf689a..091c071b270a 100644
+--- a/sound/usb/usx2y/usb_stream.c
++++ b/sound/usb/usx2y/usb_stream.c
+@@ -91,7 +91,12 @@ static int init_urbs(struct usb_stream_kernel *sk, unsigned use_packsize,
+ 
+ 	for (u = 0; u < USB_STREAM_NURBS; ++u) {
+ 		sk->inurb[u] = usb_alloc_urb(sk->n_o_ps, GFP_KERNEL);
++		if (!sk->inurb[u])
++			return -ENOMEM;
++
+ 		sk->outurb[u] = usb_alloc_urb(sk->n_o_ps, GFP_KERNEL);
++		if (!sk->outurb[u])
++			return -ENOMEM;
+ 	}
+ 
+ 	if (init_pipe_urbs(sk, use_packsize, sk->inurb, indata, dev, in_pipe) ||
+-- 
+2.32.0
+

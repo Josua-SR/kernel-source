@@ -1,0 +1,41 @@
+From 43b0742ef44c30f202afbf8355e9326710af9ca1 Mon Sep 17 00:00:00 2001
+From: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+Date: Wed, 14 Jul 2021 16:56:55 +0200
+Subject: [PATCH 4917/4917] Linux 5.10.50
+Patch-mainline: 5.10.50
+References: bsc#0000000
+Git-commit: 43b0742ef44c30f202afbf8355e9326710af9ca1
+
+Link: https://lore.kernel.org/r/20210712060843.180606720@linuxfoundation.org
+Tested-by: Pavel Machek (CIP) <pavel@denx.de>
+Tested-by: Jon Hunter <jonathanh@nvidia.com>
+Tested-by: Florian Fainelli <f.fainelli@gmail.com>
+Tested-by: Fox Chen <foxhlchen@gmail.com>
+Link: https://lore.kernel.org/r/20210712184832.376480168@linuxfoundation.org
+Tested-by: Guenter Roeck <linux@roeck-us.net>
+Tested-by: Shuah Khan <skhan@linuxfoundation.org>
+Tested-by: Sudip Mukherjee <sudip.mukherjee@codethink.co.uk>
+Tested-by: Salvatore Bonaccorso <carnil@debian.org>
+Tested-by: Hulk Robot <hulkrobot@huawei.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index ddd30b068be7..695f8e739a91 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,7 +1,7 @@
+ # SPDX-License-Identifier: GPL-2.0
+ VERSION = 5
+ PATCHLEVEL = 10
+-SUBLEVEL = 49
++SUBLEVEL = 50
+ EXTRAVERSION =
+ NAME = Dare mighty things
+ 
+-- 
+2.32.0
+

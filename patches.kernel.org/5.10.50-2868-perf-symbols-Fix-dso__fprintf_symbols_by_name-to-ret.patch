@@ -1,0 +1,46 @@
+From b3222026dde78bd3698df8f064bb6196635e9b36 Mon Sep 17 00:00:00 2001
+From: Arnaldo Carvalho de Melo <acme@redhat.com>
+Date: Mon, 8 Mar 2021 11:17:51 -0300
+Subject: [PATCH 2868/4917] perf symbols: Fix dso__fprintf_symbols_by_name() to
+ return the number of printed chars
+Patch-mainline: 5.10.50
+References: bsc#0000000
+Git-commit: b3222026dde78bd3698df8f064bb6196635e9b36
+
+[ Upstream commit 210e4c89ef61432040c6cd828fefa441f4887186 ]
+
+The 'ret' variable was initialized to zero but then it was not updated
+from the fprintf() return, fix it.
+
+Reported-by: Yang Li <yang.lee@linux.alibaba.com>
+Cc: Alexander Shishkin <alexander.shishkin@linux.intel.com>
+Cc: Ingo Molnar <mingo@redhat.com>
+Cc: Jiri Olsa <jolsa@redhat.com>
+Cc: Mark Rutland <mark.rutland@arm.com>
+Cc: Namhyung Kim <namhyung@kernel.org>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Srikar Dronamraju <srikar@linux.vnet.ibm.com>
+Fixes: 90f18e63fbd00513 ("perf symbols: List symbols in a dso in ascending name order")
+Signed-off-by: Arnaldo Carvalho de Melo <acme@redhat.com>
+Signed-off-by: Sasha Levin <sashal@kernel.org>
+
+---
+ tools/perf/util/symbol_fprintf.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/perf/util/symbol_fprintf.c b/tools/perf/util/symbol_fprintf.c
+index 35c936ce33ef..2664fb65e47a 100644
+--- a/tools/perf/util/symbol_fprintf.c
++++ b/tools/perf/util/symbol_fprintf.c
+@@ -68,7 +68,7 @@ size_t dso__fprintf_symbols_by_name(struct dso *dso,
+ 
+ 	for (nd = rb_first_cached(&dso->symbol_names); nd; nd = rb_next(nd)) {
+ 		pos = rb_entry(nd, struct symbol_name_rb_node, rb_node);
+-		fprintf(fp, "%s\n", pos->sym.name);
++		ret += fprintf(fp, "%s\n", pos->sym.name);
+ 	}
+ 
+ 	return ret;
+-- 
+2.32.0
+
