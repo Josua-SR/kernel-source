@@ -13,3 +13,5 @@ addFilter("hidden-file-or-dir /boot/\..*\.hmac")
 # macro, but we are deliberately not doing this for KMPs built from the
 # kernel spec file (fate#319339)
 addFilter("suse-policy-kmp-missing-supplements")
+# accept python /usr/bin/env shebang
+addFilter("env-script-interpreter.*")
